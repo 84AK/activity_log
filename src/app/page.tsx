@@ -1,65 +1,799 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Filter, Calendar, Users, MessageSquare, Plus, Link, Send, X,
+  Loader2, Edit2, Trash2, KeyRound, LogOut, UserPlus, LogIn,
+  Eye, EyeOff, ExternalLink, Info, Image as ImageIcon,
+  ChevronRight, Home, Settings, BookOpen, Share2
+} from "lucide-react"
+
+type LogEntry = {
+  id: string
+  week: string
+  team: string
+  author: string
+  prompt: string
+  link: string
+  summary: string
+  date: string
+}
+
+const WEEKS = ["전체", "1주차", "2주차", "3주차", "4주차", "5주차"]
+const TEAMS = ["전체", "팀 A", "팀 B", "팀 C"]
+
+export default function Dashboard() {
+  const [mounted, setMounted] = useState(false)
+
+  // View Navigation State: 'home' | 'auth' | 'dashboard'
+  const [viewState, setViewState] = useState<"home" | "auth" | "dashboard">("home")
+
+  // Auth State
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userName, setUserName] = useState("")
+  const [password, setPassword] = useState("")
+  const [userRole, setUserRole] = useState<"student" | "admin">("student")
+  const [authError, setAuthError] = useState("")
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login")
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Data State
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Filter State
+  const [filterWeek, setFilterWeek] = useState("전체")
+  const [filterTeam, setFilterTeam] = useState("전체")
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editId, setEditId] = useState("")
+
+  // Form State
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    week: "1주차",
+    team: "팀 A",
+    prompt: "",
+    link: "",
+    summary: ""
+  })
+
+  // Toast State
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  const fetchLogs = async () => {
+    setIsLoading(true)
+    try {
+      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
+      const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" })
+      if (res.ok) {
+        const result = await res.json()
+        const data = result.data
+        if (Array.isArray(data)) {
+          const mappedData = data.map((item: any) => ({
+            id: item.id || item.ID || "",
+            week: item.week || item.Week || "",
+            team: item.team || item.Team || "",
+            author: item.author || item.Author || "",
+            prompt: item.prompt || item.Prompt || "",
+            link: item.link || item.Link || "",
+            summary: item.summary || item.Summary || "",
+            date: item.date || item.Date || ""
+          }))
+          const sortedData = mappedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+          setLogs(sortedData)
+        } else {
+          setLogs([])
+        }
+      } else {
+        setLogs([])
+      }
+    } catch (e) {
+      console.error("Failed to fetch logs", e)
+      setLogs([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setMounted(true)
+    fetchLogs()
+  }, [])
+
+  const handleAuthAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userName.trim() || !password.trim()) {
+      setAuthError("아이디와 비밀번호를 입력해주세요.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: authMode,
+          username: userName,
+          password: password
+        })
+      })
+
+      const data = await res.json()
+      if (res.ok && !data.error) {
+        if (authMode === "signup") {
+          showToast("회원가입 성공! 로그인해 주세요.", "success")
+          setAuthMode("login")
+          setAuthError("")
+        } else {
+          setUserRole(data.role || "student")
+          setIsLoggedIn(true)
+          setViewState("dashboard")
+          showToast(`${userName}님, 환영합니다!`, "success")
+          setAuthError("")
+        }
+      } else {
+        setAuthError(data.error || "인증에 실패했습니다.")
+        showToast(data.error || "인증에 실패했습니다.", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      setAuthError("서버 통신 중 오류가 발생했습니다.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleLogout = () => {
+    setIsLoggedIn(false)
+    setUserName("")
+    setPassword("")
+    setViewState("home")
+    showToast("로그아웃 되었습니다.", "success")
+  }
+
+  const openCreateModal = () => {
+    setEditMode(false)
+    setEditId("")
+    setFormData({ week: "1주차", team: "팀 A", prompt: "", link: "", summary: "" })
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (log: LogEntry) => {
+    setEditMode(true)
+    setEditId(log.id)
+    setFormData({
+      week: log.week,
+      team: log.team,
+      prompt: log.prompt,
+      link: log.link,
+      summary: log.summary
+    })
+    setIsModalOpen(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      const payload = {
+        action: editMode ? "edit" : "create",
+        id: editMode ? editId : undefined,
+        author: userName,
+        password: password,
+        ...formData,
+      }
+
+      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
+      const dbRes = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+
+      const resData = await dbRes.json()
+
+      if (dbRes.ok && !resData.error) {
+        await fetchLogs()
+        setIsModalOpen(false)
+        showToast(editMode ? "기록이 성공적으로 수정되었습니다." : "새 기록이 성공적으로 추가되었습니다.", "success")
+      } else {
+        showToast(resData.error || "데이터 저장에 실패했습니다.", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      showToast("오류가 발생했습니다.", "error")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("정말로 이 기록을 삭제하시겠습니까?")) return
+
+    try {
+      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
+      const dbRes = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id, password })
+      })
+      const resData = await dbRes.json()
+
+      if (dbRes.ok && !resData.error) {
+        await fetchLogs()
+        showToast("기록이 성공적으로 삭제되었습니다.", "success")
+      } else {
+        showToast(resData.error || "비밀번호가 일치하지 않거나 권한이 없습니다.", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      showToast("삭제 중 오류가 발생했습니다.", "error")
+    }
+  }
+
+  if (!mounted) return null
+
+  // Derived state: 권한에 따른 리스트 표시
+  const authorizedLogs = userRole === "admin" ? logs : logs.filter(l => l.author === userName)
+
+  const filteredLogs = authorizedLogs.filter(log => {
+    if (filterWeek !== "전체" && log.week !== filterWeek) return false
+    if (filterTeam !== "전체" && log.team !== filterTeam) return false
+    return true
+  })
+
+  const isImageLink = (url: string) => /\.(jpeg|jpg|gif|png|webp)$/i.test(url)
+
+  // --- RENDERING VIEWS ---
+
+  // 1. Home View (Landing)
+  const renderHomeView = () => (
+    <div className="max-w-6xl mx-auto space-y-12 py-10 px-4">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        className="text-center space-y-4"
+      >
+        <div className="inline-block px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-semibold mb-2">
+          AI & Marketing Portal v2.0
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight">
+          AI 실습 및 마케팅 <span className="text-gradient">통합 포털</span>
+        </h1>
+        <p className="text-[var(--color-agency-muted)] text-lg md:text-xl max-w-2xl mx-auto">
+          팀별 주차별 활동을 기록하고 차세대 마케팅 전략을 실험해보세요.
+        </p>
+      </motion.div>
+
+      {/* Bento Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-6 grid-rows-none md:grid-rows-2 gap-6">
+
+        {/* Main: Team Practice Log */}
+        <motion.div
+          whileHover={{ y: -5 }}
+          onClick={() => setViewState(isLoggedIn ? "dashboard" : "auth")}
+          className="md:col-span-4 md:row-span-1 glass-panel p-8 rounded-3xl group cursor-pointer border border-white/10 relative overflow-hidden bg-gradient-to-br from-blue-600/20 to-indigo-900/20"
+        >
+          <div className="relative z-10 flex flex-col h-full justify-between">
+            <div className="space-y-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
+                <Calendar className="text-blue-400" />
+              </div>
+              <h2 className="text-3xl font-bold text-white tracking-tight">AI 실습 활동 기록 시스템</h2>
+              <p className="text-white/60 text-lg leading-relaxed">
+                매주 진행되는 팀별 프로젝트와 프롬프트 실험 결과를 기록하세요.<br />
+                동료들의 성과를 확인하고 자신의 성장을 추적할 수 있습니다.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-blue-400 font-bold mt-8 group-hover:gap-4 transition-all">
+              {isLoggedIn ? "대시보드 바로가기" : "로그인 후 입장하기"} <ChevronRight size={20} />
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 p-8 text-blue-500/10 group-hover:text-blue-500/20 transition-colors">
+            <Users size={180} />
+          </div>
+        </motion.div>
+
+        {/* Sellstagram Link */}
+        <motion.div
+          whileHover={{ y: -5 }}
+          className="md:col-span-2 md:row-span-1 glass-panel p-8 rounded-3xl border border-white/10 flex flex-col justify-between group cursor-pointer relative overflow-hidden bg-gradient-to-br from-purple-600/20 to-pink-900/20"
+          onClick={() => window.open("https://sellstagram.vercel.app/", "_blank")}
+        >
+          <div className="relative z-10">
+            <div className="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-500/30 mb-6">
+              <ImageIcon className="text-purple-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2 tracking-tight flex items-center gap-2">
+              셀스타그램 <ExternalLink size={18} />
+            </h2>
+            <p className="text-white/50 text-base">
+              최신 트렌드를 반영한 가상 마케팅 시뮬레이션 앱입니다. SNS 전략을 수립하고 실습하세요.
+            </p>
+          </div>
+          <div className="absolute -bottom-4 -right-4 text-purple-500/10 group-hover:text-purple-500/20 transition-colors">
+            <Share2 size={120} />
+          </div>
+        </motion.div>
+
+        {/* Guide 1: Google Drive */}
+        <motion.div
+          className="md:col-span-3 md:row-span-1 glass-panel p-8 rounded-3xl border border-white/10"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-500/30">
+              <Share2 size={20} className="text-emerald-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white">이미지/파일 업로드 가이드</h3>
+          </div>
+          <div className="space-y-4 text-sm text-white/60">
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs border border-white/10">1</span>
+              <p>구글 드라이브에 공유할 이미지나 파일을 업로드합니다.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs border border-white/10">2</span>
+              <p>마우스 우클릭 &gt; <strong className="text-emerald-400">공유</strong> &gt; '링크가 있는 모든 사용자'가 <strong className="text-emerald-400">뷰어/편집자</strong>로 볼 수 있게 설정합니다.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs border border-white/10">3</span>
+              <p>링크 복사를 눌러 나온 URL을 본 앱의 '결과물 첨부' 칸에 붙여넣으면 끝!</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Guide 2: App Usage */}
+        <motion.div
+          className="md:col-span-3 md:row-span-1 glass-panel p-8 rounded-3xl border border-white/10"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center border border-amber-500/30">
+              <BookOpen size={20} className="text-amber-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white">앱 사용 꿀팁</h3>
+          </div>
+          <div className="space-y-4 text-sm text-white/60">
+            <div className="flex gap-3 items-start">
+              <Info size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+              <p>프롬프트는 <strong className="text-white">Shift+Enter</strong>를 사용해 가독성 좋게 여러 줄로 작성할 수 있습니다.</p>
+            </div>
+            <div className="flex gap-3 items-start">
+              <Info size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+              <p>작성한 글은 <strong className="text-white">본인</strong> 또는 <strong className="text-white">관리자</strong>만 수정/삭제할 수 있어 안전합니다.</p>
+            </div>
+            <div className="flex gap-3 items-start">
+              <Info size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+              <p>오른쪽 상단의 <strong className="text-white">필터</strong>를 활용해 특정 주차나 우리 팀의 글만 모아 보세요.</p>
+            </div>
+          </div>
+        </motion.div>
+
+      </div>
+
+      {/* Footer Info */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+        className="text-center text-white/30 text-xs tracking-widest uppercase py-8"
+      >
+        Designed for Excellence • 2026 AI Learning Project
+      </motion.div>
     </div>
-  );
+  )
+
+  // 2. Auth View (Login/Signup)
+  const renderAuthView = () => (
+    <div className="min-h-[80vh] flex items-center justify-center p-4 relative">
+      <button
+        onClick={() => setViewState("home")}
+        className="absolute top-0 left-0 flex items-center gap-2 text-white/40 hover:text-white transition-colors"
+      >
+        <Home size={18} /> 홈으로 돌아가기
+      </button>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="glass-panel w-full max-w-md p-8 rounded-2xl flex flex-col items-center border border-white/10 shadow-2xl shadow-blue-900/20"
+      >
+        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-6 border border-blue-500/30">
+          {authMode === "login" ? <KeyRound size={28} className="text-blue-400" /> : <UserPlus size={28} className="text-emerald-400" />}
+        </div>
+        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
+          {authMode === "login" ? "AI팀 실습 로그인" : "AI팀 실습 회원가입"}
+        </h1>
+        <p className="text-[var(--color-agency-muted)] mb-8 text-center text-sm">
+          {authMode === "login"
+            ? "저장된 아이디와 비밀번호로 접속해주세요."
+            : "새로운 아이디와 비밀번호를 설정하여 가입해주세요."}
+        </p>
+
+        {/* Auth Mode Toggle */}
+        <div className="flex bg-white/5 p-1 rounded-xl mb-6 w-full border border-white/5">
+          <button
+            onClick={() => { setAuthMode("login"); setAuthError(""); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${authMode === "login" ? "bg-white/10 text-white shadow-lg" : "text-white/40 hover:text-white/60"}`}
+          >
+            <LogIn size={14} /> 로그인
+          </button>
+          <button
+            onClick={() => { setAuthMode("signup"); setAuthError(""); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${authMode === "signup" ? "bg-white/10 text-white shadow-lg" : "text-white/40 hover:text-white/60"}`}
+          >
+            <UserPlus size={14} /> 회원가입
+          </button>
+        </div>
+
+        <form onSubmit={handleAuthAction} className="w-full space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-1">아이디 (ID)</label>
+            <input
+              type="text" required placeholder="아이디 입력"
+              value={userName} onChange={e => setUserName(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-white/20"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-1">비밀번호 (Password)</label>
+            <div className="relative group">
+              <input
+                type={showPassword ? "text" : "password"} required placeholder="비밀번호 입력"
+                value={password} onChange={e => { setPassword(e.target.value); setAuthError(""); }}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pr-12 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-white/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors p-1"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {authError && <p className="text-red-400 text-sm pl-1 pt-1">{authError}</p>}
+
+          <button disabled={isSubmitting} type="submit" className={`w-full py-3.5 rounded-xl text-white font-bold transition-all mt-4 shadow-lg active:scale-95 flex items-center justify-center gap-2 ${authMode === "login"
+            ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/20"
+            : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20"
+            }`}>
+            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : (authMode === "login" ? <LogIn size={18} /> : <UserPlus size={18} />)}
+            {authMode === "login" ? "로그인하기" : "가입 완료하기"}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  )
+
+  // 3. Dashboard View
+  const renderDashboardView = () => (
+    <div className="space-y-8">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[var(--color-agency-border)] pb-6"
+      >
+        <div className="flex items-start gap-4">
+          <button
+            onClick={() => setViewState("home")}
+            className="mt-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-white/40 hover:text-white"
+            title="홈으로"
+          >
+            <Home size={20} />
+          </button>
+          <div>
+            <h1 className="text-3xl md:text-5xl font-bold text-white mb-2 tracking-tight">
+              실습 <span className="text-gradient">활동 대시보드</span>
+            </h1>
+            <div className="flex items-center gap-3 text-[var(--color-agency-muted)] text-lg">
+              <span>기록 중: <strong className="text-blue-300">{userName}</strong>님</span>
+              {userRole === "admin" && <span className="text-xs font-bold text-amber-900 bg-amber-400 px-2 py-0.5 rounded-md">ADMIN</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={openCreateModal}
+            className="flex-1 md:flex-none glass-panel glass-panel-hover px-5 py-3 rounded-xl font-medium flex items-center justify-center gap-2 text-white bg-blue-600/20 shadow-lg shadow-blue-500/10"
+          >
+            <Plus size={18} /> 새 기록
+          </button>
+          <button
+            onClick={handleLogout}
+            className="glass-panel glass-panel-hover px-4 py-3 rounded-xl text-white/70 hover:text-white bg-white/5 border border-white/10 flex items-center gap-2"
+          >
+            <LogOut size={18} /> <span className="hidden md:inline">로그아웃</span>
+          </button>
+        </div>
+      </motion.header>
+
+      {/* Filter Bar */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+        className="flex flex-col md:flex-row gap-4 items-center bg-[var(--color-agency-bg)]/50 p-4 rounded-2xl border border-[var(--color-agency-border)] backdrop-blur-md"
+      >
+        <div className="flex items-center gap-2 text-white font-medium pl-2">
+          <Filter size={18} className="text-blue-400" /> 필터:
+        </div>
+
+        <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
+          <select
+            value={filterWeek} onChange={(e) => setFilterWeek(e.target.value)}
+            className="glass-panel px-4 py-2 rounded-lg bg-transparent text-white border-white/10 outline-none w-full md:w-40"
+          >
+            {WEEKS.map(w => <option key={w} className="bg-gray-900">{w}</option>)}
+          </select>
+          <select
+            value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
+            className="glass-panel px-4 py-2 rounded-lg bg-transparent text-white border-white/10 outline-none w-full md:w-40"
+          >
+            {TEAMS.map(t => <option key={t} className="bg-gray-900">{t}</option>)}
+          </select>
+        </div>
+
+        {userRole === "admin" && (
+          <div className="ml-auto text-xs text-white/40 border border-white/10 px-3 py-1 rounded-full bg-black/20 hidden md:block">
+            관리자 권한으로 모든 사용자의 기록이 표시됩니다.
+          </div>
+        )}
+      </motion.div>
+
+      {/* Main Content Grid */}
+      {isLoading ? (
+        <div className="h-64 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+      ) : filteredLogs.length === 0 ? (
+        <div className="glass-panel rounded-2xl p-16 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2">
+            <Calendar className="w-8 h-8 text-white/40" />
+          </div>
+          <h2 className="text-2xl text-white font-semibold">조건에 맞는 기록이 없습니다</h2>
+          <p className="text-[var(--color-agency-muted)]">새로운 실습 기록을 남겨보세요.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredLogs.map((log, index) => (
+            <motion.div
+              key={log.id || index}
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.05 }}
+              className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col group relative"
+            >
+              {/* Action Buttons */}
+              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <button onClick={() => openEditModal(log)} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors">
+                  <Edit2 size={14} />
+                </button>
+                <button onClick={() => handleDelete(log.id)} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+
+              {/* Card Header */}
+              <div className="p-5 border-b border-white/5 bg-gradient-to-r from-blue-500/5 to-transparent">
+                <div className="flex gap-2 mb-2 pr-16">
+                  <span className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/20">
+                    {log.week}
+                  </span>
+                  <span className="px-2 py-1 rounded-md text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/20">
+                    {log.team}
+                  </span>
+                </div>
+                <h3 className="text-white font-medium flex items-center gap-2 mt-3 text-lg">
+                  <Users size={16} className="text-[var(--color-agency-muted)]" />
+                  {log.author} <span className="text-xs text-white/40 font-normal ml-2">{log.date}</span>
+                </h3>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-5 space-y-5 flex-1 flex flex-col">
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1 mb-2 text-left">
+                    <MessageSquare size={14} /> 프롬프트
+                  </h4>
+                  <div className="bg-black/20 p-3 rounded-lg border border-white/5 max-h-48 overflow-y-auto custom-scrollbar">
+                    <p className="text-sm text-white/80 whitespace-pre-wrap italic break-words">
+                      "{log.prompt || "프롬프트 내용 없음"}"
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 flex-1 flex flex-col min-h-0 text-left">
+                  <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+                    <Calendar size={14} /> 실습 요약
+                  </h4>
+                  <div className="flex-1 max-h-64 overflow-y-auto custom-scrollbar pr-2 min-h-0">
+                    <p className="text-sm text-[var(--color-agency-muted)] leading-relaxed whitespace-pre-wrap break-words">
+                      {log.summary || "등록된 요약이 없습니다."}
+                    </p>
+                  </div>
+                </div>
+
+                {log.link && (
+                  <div className="pt-4 border-t border-white/5 mt-auto text-left">
+                    <h4 className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1 mb-3">
+                      <Link size={14} /> 결과물 첨부
+                    </h4>
+
+                    {isImageLink(log.link) ? (
+                      <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 relative group-hover:border-purple-500/30 transition-colors">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={log.link} alt="첨부 결과물" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <a href={log.link} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors text-sm border border-blue-500/20">
+                        <Link size={16} />
+                        <span className="truncate">{log.link}</span>
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <main className="min-h-screen p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto overflow-x-hidden">
+
+      {/* Background Decor */}
+      <div className="fixed top-0 left-0 w-full h-full -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full" />
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={viewState}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          {viewState === "home" && renderHomeView()}
+          {viewState === "auth" && renderAuthView()}
+          {viewState === "dashboard" && renderDashboardView()}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Input Form Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="glass-panel w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h2 className="text-2xl font-semibold text-white">{editMode ? "실습 기록 수정" : "새 실습 활동 기록"}</h2>
+                <button onClick={() => setIsModalOpen(false)} className="text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                <form id="record-form" onSubmit={handleSubmit} className="space-y-6">
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm text-blue-200 flex items-center gap-2">
+                    <Users size={16} /> <strong>{userName}</strong>님으로 작성 진행 중
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">주차 (Week)</label>
+                      <select
+                        required
+                        value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
+                      >
+                        {WEEKS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-white/70 text-left block">팀 (Team)</label>
+                      <select
+                        required
+                        value={formData.team} onChange={e => setFormData({ ...formData, team: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
+                      >
+                        {TEAMS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10 text-left">
+                    <label className="text-sm font-medium text-white/70">사용한 프롬프트</label>
+                    <textarea
+                      required placeholder="이번 주차 실습에 사용한 핵심 프롬프트를 적어주세요." rows={3}
+                      value={formData.prompt} onChange={e => setFormData({ ...formData, prompt: e.target.value })}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none font-mono text-sm leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="space-y-2 text-left">
+                    <label className="text-sm font-medium text-white/70">결과물 이미지/영상 링크 URL</label>
+                    <input
+                      type="url" placeholder="https://..."
+                      value={formData.link} onChange={e => setFormData({ ...formData, link: e.target.value })}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20"
+                    />
+                  </div>
+
+                  <div className="space-y-2 text-left">
+                    <label className="text-sm font-medium text-white/70">실습 내용 및 결과 요약</label>
+                    <textarea
+                      required placeholder="이번 주 배운 내용과 결과를 통해 얻은 점을 생생하게 설명해주세요." rows={4}
+                      value={formData.summary} onChange={e => setFormData({ ...formData, summary: e.target.value })}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none"
+                    />
+                  </div>
+                </form>
+              </div>
+
+              <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
+                <button
+                  type="button" onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 font-medium transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit" form="record-form" disabled={isSubmitting}
+                  className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-2 disabled:opacity-50 transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  {editMode ? "수정 완료" : "기록 저장"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className={`fixed bottom-8 left-1/2 z-[60] px-6 py-3 rounded-full flex items-center gap-3 shadow-2xl backdrop-blur-md border ${toast.type === "success"
+              ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/30"
+              : "bg-red-500/20 text-red-100 border-red-500/30"
+              }`}
+          >
+            {toast.type === "success" ? (
+              <div className="w-6 h-6 rounded-full bg-emerald-500/30 flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-red-500/30 flex items-center justify-center">
+                <X className="w-4 h-4 text-red-300" />
+              </div>
+            )}
+            <span className="font-medium text-sm md:text-base whitespace-nowrap">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </main>
+  )
 }
