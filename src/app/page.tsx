@@ -121,7 +121,7 @@ export default function Dashboard() {
       const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
       const res = await fetch(APPS_SCRIPT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           action: authMode,
           username: userName,
@@ -198,7 +198,7 @@ export default function Dashboard() {
       const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
       const dbRes = await fetch(APPS_SCRIPT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload)
       })
 
@@ -226,7 +226,7 @@ export default function Dashboard() {
       const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
       const dbRes = await fetch(APPS_SCRIPT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({ action: "delete", id, password })
       })
       const resData = await dbRes.json()
