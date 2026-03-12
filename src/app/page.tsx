@@ -32,7 +32,6 @@ type ResourceEntry = {
 }
 
 const WEEKS = ["전체", "1주차", "2주차", "3주차", "4주차", "5주차"]
-const TEAMS = ["전체", "팀 A", "팀 B", "팀 C"]
 
 export default function Dashboard() {
   const [mounted, setMounted] = useState(false)
@@ -57,7 +56,6 @@ export default function Dashboard() {
 
   // Filter State
   const [filterWeek, setFilterWeek] = useState("전체")
-  const [filterTeam, setFilterTeam] = useState("전체")
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -71,7 +69,6 @@ export default function Dashboard() {
   
   const [formData, setFormData] = useState({
     week: "1주차",
-    team: "팀 A",
     prompt: "",
     link: "",
     summary: ""
@@ -223,7 +220,7 @@ export default function Dashboard() {
     if (dashboardTab === "logs") {
       setEditMode(false)
       setEditId("")
-      setFormData({ week: "1주차", team: "팀 A", prompt: "", link: "", summary: "" })
+      setFormData({ week: "1주차", prompt: "", link: "", summary: "" })
       setIsModalOpen(true)
     } else if (dashboardTab === "resources" && userRole === "admin") {
       setResourceFormData({ title: "", content: "" })
@@ -236,7 +233,6 @@ export default function Dashboard() {
     setEditId(log.id)
     setFormData({
       week: log.week,
-      team: log.team,
       prompt: log.prompt,
       link: log.link,
       summary: log.summary
@@ -357,7 +353,6 @@ export default function Dashboard() {
 
   const filteredLogs = authorizedLogs.filter(log => {
     if (filterWeek !== "전체" && log.week !== filterWeek) return false
-    if (filterTeam !== "전체" && log.team !== filterTeam) return false
     return true
   })
 
@@ -676,12 +671,6 @@ export default function Dashboard() {
               >
                 {WEEKS.map(w => <option key={w} className="bg-gray-900">{w}</option>)}
               </select>
-              <select
-                value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
-                className="glass-panel px-4 py-2 rounded-lg bg-transparent text-white border-white/10 outline-none w-full md:w-40"
-              >
-                {TEAMS.map(t => <option key={t} className="bg-gray-900">{t}</option>)}
-              </select>
             </div>
 
             {userRole === "admin" && (
@@ -727,9 +716,6 @@ export default function Dashboard() {
                     <div className="flex gap-2 mb-2 pr-16">
                       <span className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/20">
                         {log.week}
-                      </span>
-                      <span className="px-2 py-1 rounded-md text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/20">
-                        {log.team}
                       </span>
                     </div>
                     <h3 className="text-white font-medium flex items-center gap-2 mt-3 text-lg">
@@ -903,27 +889,15 @@ export default function Dashboard() {
                     <Users size={16} /> <strong>{userName}</strong>님으로 작성 진행 중
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">주차 (Week)</label>
-                      <select
-                        required
-                        value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
-                      >
-                        {WEEKS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-white/70 text-left block">팀 (Team)</label>
-                      <select
-                        required
-                        value={formData.team} onChange={e => setFormData({ ...formData, team: e.target.value })}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
-                      >
-                        {TEAMS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
-                      </select>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">주차 (Week)</label>
+                    <select
+                      required
+                      value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
+                    >
+                      {WEEKS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
+                    </select>
                   </div>
 
                   <div className="space-y-2 pt-2 border-t border-white/10 text-left">
