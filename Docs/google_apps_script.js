@@ -1,7 +1,3 @@
-/**
- * Team Weekly Activity Log - Google Sheets Backend (Phase 7: Signup & Login Enabled)
- */
-
 function getOrCreateSheet(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
@@ -36,6 +32,20 @@ function getOrCreateUsersSheet() {
   return sheet;
 }
 
+function getOrCreateResourcesSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Resources");
+  
+  if (!sheet) {
+    sheet = ss.insertSheet("Resources");
+    const headers = ["ID", "Title", "Content", "Author", "Date"];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setBackground("#8B5CF6").setFontColor("#FFFFFF").setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 // GET 요청 처리 (전체 시트 데이터 가져오기)
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -44,7 +54,7 @@ function doGet(e) {
 
   sheets.forEach(sheet => {
     const name = sheet.getName();
-    if (name === "Users") return; // 유저 시트는 제외
+    if (name === "Users" || name === "Resources") return; // 유저 시트와 자료실 시트는 제외
 
     const data = sheet.getDataRange().getValues();
     if (data.length > 1) {
@@ -174,7 +184,7 @@ function doPost(e) {
       
       for (let s = 0; s < sheets.length; s++) {
         const sheet = sheets[s];
-        if (sheet.getName() === "Users") continue;
+        if (sheet.getName() === "Users" || sheet.getName() === "Resources") continue;
         const data = sheet.getDataRange().getValues();
         if (data.length <= 1) continue;
         
@@ -218,7 +228,60 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
       }
     }
+    
+    // --- 자료실 (Resources) 관련 ---
+    
+    // 1. 자료실 목록 가져오기
+    if (action === "getResources") {
+      const resourceSheet = getOrCreateResourcesSheet();
+      const data = resourceSheet.getDataRange().getValues();
+      if (data.length <= 1) {
+         return ContentService.createTextOutput(JSON.stringify({ data: [] })).setMimeType(ContentService.MimeType.JSON);
+      }
       
+      const rows = data.slice(1);
+      const resourcesList = rows.map(row => ({
+        id: row[0],
+        title: row[1],
+        content: row[2],
+        author: row[3],
+        date: row[4] ? Utilities.formatDate(new Date(row[4]), "Asia/Seoul", "yyyy-MM-dd HH:mm") : ""
+      }));
+      
+      return ContentService.createTextOutput(JSON.stringify({ data: resourcesList })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // 2. 자료실 글 작성 (관리자만 가능)
+    if (action === "createResource") {
+      if (body.password !== ADMIN_PASSWORD) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const resourceSheet = getOrCreateResourcesSheet();
+      const newId = new Date().getTime().toString();
+      const now = new Date();
+      
+      resourceSheet.appendRow([newId, body.title, body.content, body.author, now]);
+      
+      return ContentService.createTextOutput(JSON.stringify({ success: true, id: newId })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // 3. 자료실 글 삭제 (관리자만 가능)
+    if (action === "deleteResource") {
+      if (body.password !== ADMIN_PASSWORD) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const resourceSheet = getOrCreateResourcesSheet();
+      const resRows = resourceSheet.getDataRange().getValues();
+      for (let i = 1; i < resRows.length; i++) {
+        if (String(resRows[i][0]) === String(body.id)) {
+          resourceSheet.deleteRow(i + 1);
+          return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ error: "해당 자료를 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+    }
+
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ error: error.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
