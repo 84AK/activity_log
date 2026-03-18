@@ -12,6 +12,11 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+// 개인정보 관련 컴포넌트 추가
+import PrivacyModal from "@/components/PrivacyModal"
+import PrivacyPolicyModal from "@/components/PrivacyPolicyModal"
+import Footer from "@/components/Footer"
+
 type LogEntry = {
   id: string
   week: string
@@ -88,6 +93,21 @@ export default function Dashboard() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // 개인정보 모달 관련 상태
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
+  const [isPrivacyPolicyModalOpen, setIsPrivacyPolicyModalOpen] = useState(false)
+
+  const handleToggleDoNotShowToday = (checked: boolean) => {
+    if (checked) {
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      tomorrow.setHours(0, 0, 0, 0) // 자정 기준
+      localStorage.setItem("hidePrivacyModalUntil", tomorrow.toISOString())
+    } else {
+      localStorage.removeItem("hidePrivacyModalUntil")
+    }
+  }
+
   const fetchLogs = async () => {
     setIsLoading(true)
     try {
@@ -159,6 +179,12 @@ export default function Dashboard() {
        else if (dashboardTab === "resources") fetchResources()
     } else {
        fetchLogs()
+    }
+
+    // 개인정보 모달 노출 여부 체크
+    const hideUntil = localStorage.getItem("hidePrivacyModalUntil")
+    if (!hideUntil || new Date(hideUntil) < new Date()) {
+       setIsPrivacyModalOpen(true)
     }
   }, [viewState, dashboardTab])
 
@@ -1040,6 +1066,20 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 개인정보 관련 모달 */}
+      <PrivacyModal 
+        isOpen={isPrivacyModalOpen} 
+        onClose={() => setIsPrivacyModalOpen(false)} 
+        onToggleDoNotShowToday={handleToggleDoNotShowToday} 
+      />
+      <PrivacyPolicyModal 
+        isOpen={isPrivacyPolicyModalOpen} 
+        onClose={() => setIsPrivacyPolicyModalOpen(false)} 
+      />
+
+      {/* 푸터 상시 노출 */}
+      <Footer onShowPolicy={() => setIsPrivacyPolicyModalOpen(true)} />
 
     </main>
   )
