@@ -26,6 +26,8 @@ type LogEntry = {
   link: string
   summary: string
   date: string
+  score?: string
+  model?: string
 }
 
 type ResourceEntry = {
@@ -58,6 +60,7 @@ export default function Dashboard() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [resources, setResources] = useState<ResourceEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Filter State
   const [filterWeek, setFilterWeek] = useState("전체")
@@ -73,10 +76,12 @@ export default function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   const [formData, setFormData] = useState({
-    week: "1주차",
+    week: new Date().toISOString().split('T')[0], // 기본값을 오늘 날짜로 설정
     prompt: "",
     link: "",
-    summary: ""
+    summary: "",
+    score: "5",
+    model: "Gemini 1.5 Pro"
   })
 
   // Resource Form State
@@ -97,6 +102,12 @@ export default function Dashboard() {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
   const [isPrivacyPolicyModalOpen, setIsPrivacyPolicyModalOpen] = useState(false)
 
+  // 상세 보기 모달 상태
+  const [selectedEntry, setSelectedEntry] = useState<LogEntry | ResourceEntry | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+
+  const PROXY_URL = '/api/proxy'
+
   const handleToggleDoNotShowToday = (checked: boolean) => {
     if (checked) {
       const tomorrow = new Date()
@@ -108,16 +119,21 @@ export default function Dashboard() {
     }
   }
 
-  const fetchLogs = async () => {
-    setIsLoading(true)
+  const refreshData = async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
+    setIsRefreshing(true)
     try {
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const res = await fetch(APPS_SCRIPT_URL, { cache: "no-store" })
+      const res = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "getAllData" })
+      })
       if (res.ok) {
         const result = await res.json()
-        const data = result.data
-        if (Array.isArray(data)) {
-          const mappedData = data.map((item: any) => ({
+        
+        // 1. Logs 업데이트 및 캐싱
+        if (Array.isArray(result.logs)) {
+          const mappedLogs = result.logs.map((item: any) => ({
             id: item.id || item.ID || "",
             week: item.week || item.Week || "",
             team: item.team || item.Team || "",
@@ -125,68 +141,59 @@ export default function Dashboard() {
             prompt: item.prompt || item.Prompt || "",
             link: item.link || item.Link || "",
             summary: item.summary || item.Summary || "",
-            date: item.date || item.Date || ""
-          }))
-          const sortedData = mappedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
-          setLogs(sortedData)
-        } else {
-          setLogs([])
+            date: item.date || item.Date || "",
+            score: item.score || item.Score || "",
+            model: item.model || item.Model || ""
+          })).sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))
+          
+          setLogs(mappedLogs)
+          localStorage.setItem("vibe_logs_cache", JSON.stringify(mappedLogs))
         }
-      } else {
-        setLogs([])
+
+        // 2. Resources 업데이트 및 캐싱
+        if (Array.isArray(result.resources)) {
+          const sortedResources = result.resources.sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))
+          setResources(sortedResources)
+          localStorage.setItem("vibe_resources_cache", JSON.stringify(sortedResources))
+        }
       }
     } catch (e) {
-      console.error("Failed to fetch logs", e)
-      setLogs([])
+      console.error("Failed to refresh data", e)
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
-  const fetchResources = async () => {
-    setIsLoading(true)
-    try {
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const res = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "getResources" })
-      })
-      if (res.ok) {
-        const result = await res.json()
-        const data = result.data
-        if (Array.isArray(data)) {
-          const sortedData = data.sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))
-          setResources(sortedData)
-        } else {
-          setResources([])
-        }
-      } else {
-        setResources([])
-      }
-    } catch (e) {
-      console.error("Failed to fetch resources", e)
-      setResources([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // 호환성을 위해 기존 함수들을 refreshData로 연결
+  const fetchLogs = () => refreshData()
+  const fetchResources = () => refreshData()
 
   useEffect(() => {
     setMounted(true)
-    if (viewState === "dashboard") {
-       if (dashboardTab === "logs") fetchLogs()
-       else if (dashboardTab === "resources") fetchResources()
-    } else {
-       fetchLogs()
+    
+    // 1. 캐시 데이터 먼저 로드 (SWR)
+    const cachedLogs = localStorage.getItem("vibe_logs_cache")
+    const cachedResources = localStorage.getItem("vibe_resources_cache")
+    
+    if (cachedLogs) {
+      setLogs(JSON.parse(cachedLogs))
+      setIsLoading(false) // 캐시가 있으면 일단 로딩 해제
     }
+    
+    if (cachedResources) {
+      setResources(JSON.parse(cachedResources))
+    }
+
+    // 2. 백그라운드에서 최신 데이터 패치
+    refreshData(!cachedLogs) // 캐시가 없으면 로딩 인디케이터 표시
 
     // 개인정보 모달 노출 여부 체크
     const hideUntil = localStorage.getItem("hidePrivacyModalUntil")
     if (!hideUntil || new Date(hideUntil) < new Date()) {
        setIsPrivacyModalOpen(true)
     }
-  }, [viewState, dashboardTab])
+  }, []) // viewState나 dashboardTab 변경 시 캐시를 사용하므로 매번 fetch할 필요 없음
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -197,10 +204,9 @@ export default function Dashboard() {
 
     setIsSubmitting(true)
     try {
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const res = await fetch(APPS_SCRIPT_URL, {
+      const res = await fetch(PROXY_URL, {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: authMode,
           username: userName,
@@ -246,7 +252,14 @@ export default function Dashboard() {
     if (dashboardTab === "logs") {
       setEditMode(false)
       setEditId("")
-      setFormData({ week: "1주차", prompt: "", link: "", summary: "" })
+      setFormData({ 
+        week: new Date().toISOString().split('T')[0], 
+        prompt: "", 
+        link: "", 
+        summary: "",
+        score: "5",
+        model: "Gemini 1.5 Pro"
+      })
       setIsModalOpen(true)
     } else if (dashboardTab === "resources" && userRole === "admin") {
       setResourceFormData({ title: "", content: "" })
@@ -258,10 +271,12 @@ export default function Dashboard() {
     setEditMode(true)
     setEditId(log.id)
     setFormData({
-      week: log.week,
+      week: log.week || new Date().toISOString().split('T')[0],
       prompt: log.prompt,
       link: log.link,
-      summary: log.summary
+      summary: log.summary,
+      score: log.score || "5",
+      model: log.model || "Gemini 1.5 Pro"
     })
     setIsModalOpen(true)
   }
@@ -279,10 +294,9 @@ export default function Dashboard() {
         ...formData,
       }
 
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const dbRes = await fetch(APPS_SCRIPT_URL, {
+      const dbRes = await fetch(PROXY_URL, {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
 
@@ -311,28 +325,28 @@ export default function Dashboard() {
     
     try {
       const payload = {
-        action: "createResource",
+        action: editMode ? "editResource" : "createResource",
+        id: editMode ? editId : undefined,
         author: userName,
         password: password,
         title: resourceFormData.title,
         content: resourceFormData.content
       };
 
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const dbRes = await fetch(APPS_SCRIPT_URL, {
+      const dbRes = await fetch(PROXY_URL, {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
 
       const resData = await dbRes.json()
 
       if (dbRes.ok && !resData.error) {
-        await fetchResources()
+        await refreshData()
         setIsResourceModalOpen(false)
-        showToast("자료가 성공적으로 등록되었습니다.", "success")
+        showToast(editMode ? "자료가 성공적으로 수정되었습니다." : "자료가 성공적으로 등록되었습니다.", "success")
       } else {
-        showToast(resData.error || "자료 등록에 실패했습니다.", "error")
+        showToast(resData.error || "자료 처리에 실패했습니다.", "error")
       }
     } catch (err) {
       console.error(err)
@@ -342,15 +356,24 @@ export default function Dashboard() {
     }
   }
 
+  const openResourceEditModal = (res: ResourceEntry) => {
+    setEditMode(true)
+    setEditId(res.id)
+    setResourceFormData({
+      title: res.title,
+      content: res.content
+    })
+    setIsResourceModalOpen(true)
+  }
+
   const handleDelete = async (id: string, type: "log" | "resource" = "log") => {
     if (!window.confirm("정말로 삭제하시겠습니까?")) return
 
     try {
       const action = type === "log" ? "delete" : "deleteResource";
-      const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbydxsw761OAU7j9f6oVeAV8sfKIyn56sRB21bTPum2PqJY22Pe3wSdSvQlsqN_PQMFvkA/exec"
-      const dbRes = await fetch(APPS_SCRIPT_URL, {
+      const dbRes = await fetch(PROXY_URL, {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, id, password })
       })
       const resData = await dbRes.json()
@@ -631,6 +654,19 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 text-[var(--color-agency-muted)] text-lg">
                 <span>접속 중: <strong className="text-blue-300">{userName}</strong>님</span>
                 {userRole === "admin" && <span className="text-xs font-bold text-amber-900 bg-amber-400 px-2 py-0.5 rounded-md">ADMIN</span>}
+                <AnimatePresence>
+                  {isRefreshing && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="flex items-center gap-1.5 text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-tighter"
+                    >
+                      <Loader2 size={10} className="animate-spin" />
+                      <span>Syncing</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -751,48 +787,69 @@ export default function Dashboard() {
                   </div>
 
                   {/* Card Body */}
-                  <div className="p-5 space-y-5 flex-1 flex flex-col">
+                  <div className="p-5 space-y-4 flex-1 flex flex-col">
                     <div className="space-y-2">
-                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1 mb-2 text-left">
-                        <MessageSquare size={14} /> 프롬프트
-                      </h4>
-                      <div className="bg-black/20 p-3 rounded-lg border border-white/5 max-h-48 overflow-y-auto custom-scrollbar">
-                        <p className="text-sm text-white/80 whitespace-pre-wrap italic break-words">
+                      <div className="flex justify-between items-center mb-1">
+                        <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1 text-left">
+                          <MessageSquare size={14} /> 프롬프트
+                        </h4>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(log.prompt);
+                            showToast("프롬프트가 복사되었습니다!");
+                          }}
+                          className="text-[10px] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white px-2 py-0.5 rounded border border-white/10 transition-colors flex items-center gap-1"
+                        >
+                          <Share2 size={10} /> 복사
+                        </button>
+                      </div>
+                      <div className="bg-black/20 p-3 rounded-lg border border-white/5">
+                        <p className="text-sm text-white/80 line-clamp-3 italic break-words text-left">
                           "{log.prompt || "프롬프트 내용 없음"}"
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-2 flex-1 flex flex-col min-h-0 text-left">
-                      <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+                      <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1 mb-1">
                         <Calendar size={14} /> 실습 요약
                       </h4>
-                      <div className="flex-1 max-h-64 overflow-y-auto custom-scrollbar pr-2 min-h-0">
-                        <p className="text-sm text-[var(--color-agency-muted)] leading-relaxed whitespace-pre-wrap break-words">
+                      <div className="flex-1 min-h-0">
+                        <p className="text-sm text-[var(--color-agency-muted)] leading-relaxed line-clamp-4 break-words">
                           {log.summary || "등록된 요약이 없습니다."}
                         </p>
                       </div>
                     </div>
 
-                    {log.link && (
-                      <div className="pt-4 border-t border-white/5 mt-auto text-left">
-                        <h4 className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1 mb-3">
-                          <Link size={14} /> 결과물 첨부
-                        </h4>
+                    <div className="flex flex-col gap-3 pt-2">
+                       <button 
+                         onClick={() => { setSelectedEntry(log); setIsDetailModalOpen(true); }}
+                         className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-medium transition-all"
+                       >
+                         전체 내용 보기
+                       </button>
 
-                        {isImageLink(log.link) ? (
-                          <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 relative group-hover:border-purple-500/30 transition-colors">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={log.link} alt="첨부 결과물" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <a href={log.link} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors text-sm border border-blue-500/20">
-                            <Link size={16} />
-                            <span className="truncate">{log.link}</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
+                      {log.link && (
+                        <div className="pt-2 border-t border-white/5 text-left">
+                          <h4 className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+                            <Link size={14} /> 결과물 첨부
+                          </h4>
+
+                          {isImageLink(log.link) ? (
+                            <div className="w-full h-24 rounded-lg overflow-hidden border border-white/10 relative group-hover:border-purple-500/30 transition-colors">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={log.link} alt="첨부 결과물" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <a href={log.link} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors text-xs border border-blue-500/20">
+                              <Link size={14} />
+                              <span className="truncate">{log.link}</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -827,6 +884,9 @@ export default function Dashboard() {
                   {/* Action Buttons (Admin only) */}
                   {userRole === "admin" && (
                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button onClick={() => openResourceEditModal(resource)} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors">
+                        <Edit2 size={14} />
+                      </button>
                       <button onClick={() => handleDelete(resource.id, "resource")} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors">
                         <Trash2 size={14} />
                       </button>
@@ -915,23 +975,46 @@ export default function Dashboard() {
                     <Users size={16} /> <strong>{userName}</strong>님으로 작성 진행 중
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">주차 (Week)</label>
-                    <select
-                      required
-                      value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors appearance-none"
-                    >
-                      {WEEKS.filter(w => w !== "전체").map(w => <option key={w} className="bg-gray-900">{w}</option>)}
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">실습 날짜 (Date)</label>
+                      <input
+                        type="date" required
+                        value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">사용된 AI 모델 (Model)</label>
+                      <input
+                        type="text" placeholder="예: Gemini 1.5 Pro, GPT-4o"
+                        value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-left">
+                    <label className="text-sm font-medium text-white/70 flex items-center gap-1">실습 만족도 (Score: 1-5)</label>
+                    <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/5 w-fit">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star} type="button"
+                          onClick={() => setFormData({ ...formData, score: star.toString() })}
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${Number(formData.score) >= star ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "text-white/30 hover:text-white/50"}`}
+                        >
+                          {star}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="space-y-2 pt-2 border-t border-white/10 text-left">
-                    <label className="text-sm font-medium text-white/70">사용한 프롬프트</label>
+                    <label className="text-sm font-medium text-white/70 flex items-center gap-1">사용한 프롬프트 <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/40 uppercase">Markdown</span></label>
                     <textarea
-                      required placeholder="이번 주차 실습에 사용한 핵심 프롬프트를 적어주세요." rows={3}
+                      required placeholder="이번 실습에 사용한 핵심 프롬프트를 적어주세요. 마크다운 형식을 지원합니다." rows={4}
                       value={formData.prompt} onChange={e => setFormData({ ...formData, prompt: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none font-mono text-sm leading-relaxed"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none font-mono text-sm leading-relaxed custom-scrollbar"
                     />
                   </div>
 
@@ -940,16 +1023,16 @@ export default function Dashboard() {
                     <input
                       type="url" placeholder="https://..."
                       value={formData.link} onChange={e => setFormData({ ...formData, link: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 transition-colors"
                     />
                   </div>
 
                   <div className="space-y-2 text-left">
                     <label className="text-sm font-medium text-white/70">실습 내용 및 결과 요약</label>
                     <textarea
-                      required placeholder="이번 주 배운 내용과 결과를 통해 얻은 점을 생생하게 설명해주세요." rows={4}
+                      required placeholder="이번 주 배운 내용과 결과를 통해 얻은 점을 생생하게 설명해주세요. (목록 카드에 요약되어 표시됩니다)" rows={4}
                       value={formData.summary} onChange={e => setFormData({ ...formData, summary: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none custom-scrollbar"
                     />
                   </div>
                 </form>
@@ -1063,6 +1146,121 @@ export default function Dashboard() {
               </div>
             )}
             <span className="font-medium text-sm md:text-base whitespace-nowrap">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Detail View Modal */}
+      <AnimatePresence>
+        {isDetailModalOpen && selectedEntry && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="glass-panel w-full max-w-3xl rounded-3xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl border-white/10"
+            >
+              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${'title' in selectedEntry ? "bg-purple-500/20 text-purple-400" : "bg-blue-500/20 text-blue-400"}`}>
+                    {'title' in selectedEntry ? <BookOpen size={20} /> : <MessageSquare size={20} />}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white leading-tight">
+                      {'title' in selectedEntry ? selectedEntry.title : `${selectedEntry.author}님의 실습 기록`}
+                    </h2>
+                    <p className="text-xs text-white/40 mt-1">
+                      {selectedEntry.date} • {selectedEntry.author}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setIsDetailModalOpen(false)} className="text-white/30 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-8 overflow-y-auto custom-scrollbar space-y-8 bg-black/20">
+                {'prompt' in selectedEntry && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">AI Model</p>
+                      <p className="text-blue-400 font-semibold">{selectedEntry.model || "N/A"}</p>
+                    </div>
+                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Score</p>
+                      <p className="text-amber-400 font-bold flex items-center gap-1">
+                        {selectedEntry.score || "5"} / 5
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-white/70 uppercase tracking-widest flex items-center gap-2">
+                    <div className="w-1.5 h-4 bg-emerald-500 rounded-full" />
+                    {'content' in selectedEntry ? "내용" : "사용된 프롬프트"}
+                  </h3>
+                  <div className="glass-panel p-6 rounded-2xl bg-white/[0.02] border-white/5 prose prose-invert prose-blue max-w-none prose-pre:bg-black/50 prose-pre:border-white/10 text-sm md:text-base">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {'prompt' in selectedEntry ? selectedEntry.prompt : selectedEntry.content}
+                    </ReactMarkdown>
+                  </div>
+                  {'prompt' in selectedEntry && (
+                     <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedEntry.prompt);
+                          showToast("프롬프트가 복사되었습니다!");
+                        }}
+                        className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
+                     >
+                       <Share2 size={14} /> 프롬프트 복사하기
+                     </button>
+                  )}
+                </div>
+
+                {'summary' in selectedEntry && (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-white/70 uppercase tracking-widest flex items-center gap-2">
+                      <div className="w-1.5 h-4 bg-blue-500 rounded-full" />
+                      실습 요약 및 결과
+                    </h3>
+                    <div className="text-white/80 leading-relaxed whitespace-pre-wrap text-[15px] pl-2 border-l-2 border-white/5">
+                      {selectedEntry.summary}
+                    </div>
+                  </div>
+                )}
+
+                {('link' in selectedEntry) && selectedEntry.link && (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-white/70 uppercase tracking-widest flex items-center gap-2">
+                      <div className="w-1.5 h-4 bg-purple-500 rounded-full" />
+                      결과물 링크
+                    </h3>
+                    {isImageLink(selectedEntry.link) ? (
+                      <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={selectedEntry.link} alt="Detail" className="w-full h-auto object-contain max-h-[500px] bg-black/40" />
+                      </div>
+                    ) : (
+                      <a href={selectedEntry.link} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all border border-blue-500/20 group">
+                        <ExternalLink size={20} className="group-hover:scale-110 transition-transform" />
+                        <span className="font-medium truncate">{selectedEntry.link}</span>
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end">
+                <button
+                  onClick={() => setIsDetailModalOpen(false)}
+                  className="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -4,7 +4,7 @@ function getOrCreateSheet(sheetName) {
   
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
-    const headers = ["ID", "Week", "Team", "Author", "Prompt", "Link", "Summary", "Date", "Password"];
+    const headers = ["ID", "Week", "Team", "Author", "Prompt", "Link", "Summary", "Score", "Model", "Date", "Password"];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length).setBackground("#2563EB").setFontColor("#FFFFFF").setFontWeight("bold");
     sheet.setFrozenRows(1);
@@ -80,8 +80,17 @@ function doGet(e) {
 
 // POST 요청 처리
 function doPost(e) {
+  const AUTH_TOKEN = "vibe_auth_2026_secure_key"; // Next.js 서버의 AUTH_TOKEN과 일치해야 함
+  
   try {
     const body = JSON.parse(e.postData.contents);
+    
+    // 보안 토큰 검증
+    if (body.authToken !== AUTH_TOKEN) {
+      return ContentService.createTextOutput(JSON.stringify({ error: "Unauthorized access" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     const action = body.action || "create"; 
     const ADMIN_PASSWORD = "admin";
     
@@ -156,12 +165,14 @@ function doPost(e) {
       };
       
       setVal("ID", newId);
-      setVal("Week", body.week || "1주차");
+      setVal("Week", body.week || dateObj.toISOString().split('T')[0]); // 주차 컬럼에 선택된 날짜 저장
       setVal("Team", body.team || "팀 미정");
       setVal("Author", body.author || "작성자 미정");
       setVal("Prompt", body.prompt || "");
       setVal("Link", body.link || "");
       setVal("Summary", body.summary || "");
+      setVal("Score", body.score || "");
+      setVal("Model", body.model || "");
       setVal("Date", dateObj.toISOString().split('T')[0]);
       setVal("Password", body.password || "");
       
@@ -220,15 +231,68 @@ function doPost(e) {
           const idx = headers.indexOf(key);
           if (idx !== -1 && val !== undefined) targetSheet.getRange(rowIndex, idx + 1).setValue(val);
         };
-        updateCell("Week", body.week);
+        updateCell("Week", body.week); // 수정 시 날짜 동기화
         updateCell("Team", body.team);
         updateCell("Prompt", body.prompt);
         updateCell("Link", body.link);
         updateCell("Summary", body.summary);
+        updateCell("Score", body.score);
+        updateCell("Model", body.model);
         return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
       }
     }
     
+    // --- 데이터 통합 요청 (Batch Fetch) ---
+    if (action === "getAllData") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheets = ss.getSheets();
+      let allLogs = [];
+
+      // 1. Logs 데이터 가져오기 (doGet 로직 통합)
+      sheets.forEach(sheet => {
+        const name = sheet.getName();
+        if (name === "Users" || name === "Resources") return; 
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length > 1) {
+          const headers = data[0];
+          const rows = data.slice(1);
+          
+          const result = rows.map(row => {
+            let obj = {};
+            headers.forEach((header, index) => {
+              if (header !== "Password") {
+                obj[header] = row[index];
+              }
+            });
+            return obj;
+          });
+          allLogs = allLogs.concat(result);
+        }
+      });
+
+      // 2. Resources 데이터 가져오기 (getResources 로직 통합)
+      const resourceSheet = getOrCreateResourcesSheet();
+      const resData = resourceSheet.getDataRange().getValues();
+      let allResources = [];
+      
+      if (resData.length > 1) {
+        const rows = resData.slice(1);
+        allResources = rows.map(row => ({
+          id: row[0],
+          title: row[1],
+          content: row[2],
+          author: row[3],
+          date: row[4] ? Utilities.formatDate(new Date(row[4]), "Asia/Seoul", "yyyy-MM-dd HH:mm") : ""
+        }));
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        logs: allLogs, 
+        resources: allResources 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // --- 자료실 (Resources) 관련 ---
     
     // 1. 자료실 목록 가져오기
@@ -280,6 +344,36 @@ function doPost(e) {
         }
       }
       return ContentService.createTextOutput(JSON.stringify({ error: "해당 자료를 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 4. 자료실 글 수정 (관리자만 가능)
+    if (action === "editResource") {
+      if (body.password !== ADMIN_PASSWORD) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const resourceSheet = getOrCreateResourcesSheet();
+      const data = resourceSheet.getDataRange().getValues();
+      const headers = data[0];
+      let rowIndex = -1;
+
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(body.id)) {
+          rowIndex = i + 1;
+          break;
+        }
+      }
+
+      if (rowIndex === -1) return ContentService.createTextOutput(JSON.stringify({ error: "기록을 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+
+      const updateCell = (key, val) => {
+        const idx = headers.indexOf(key);
+        if (idx !== -1 && val !== undefined) resourceSheet.getRange(rowIndex, idx + 1).setValue(val);
+      };
+
+      updateCell("Title", body.title);
+      updateCell("Content", body.content);
+      return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
     }
 
   } catch (error) {
