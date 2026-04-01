@@ -85,11 +85,23 @@ export default function AdminPortal() {
         body: JSON.stringify({ action: "read" })
       });
       const data = await res.json();
-      if (res.ok && data.data) {
-        setLogs(data.data || []);
-      }
-      if (res.ok && data.resources) {
-        setResources(data.resources || []);
+      
+      if (res.ok) {
+        // 1. 실습 기록(Logs) 매핑 및 정렬
+        if (Array.isArray(data.logs)) {
+          const sortedLogs = [...data.logs].sort((a: any, b: any) => {
+            return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+          });
+          setLogs(sortedLogs);
+        }
+
+        // 2. 자료실(Resources) 매핑 및 정렬
+        if (Array.isArray(data.resources)) {
+          const sortedResources = [...data.resources].sort((a: any, b: any) => {
+            return Number(b.id || 0) - Number(a.id || 0);
+          });
+          setResources(sortedResources);
+        }
       }
     } catch (err) {
       console.error(err);
