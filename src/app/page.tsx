@@ -258,7 +258,7 @@ export default function Dashboard() {
         link: "", 
         summary: "",
         score: "5",
-        model: "Gemini 1.5 Pro"
+        model: ""
       })
       setIsModalOpen(true)
     } else if (dashboardTab === "resources" && userRole === "admin") {
@@ -760,38 +760,33 @@ export default function Dashboard() {
               {filteredLogs.map((log, index) => (
                 <motion.div
                   key={log.id || index}
-                  initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.05 }}
-                  className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col group relative"
+                  initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
+                  onClick={() => { setSelectedEntry(log); setIsDetailModalOpen(true); }}
+                  className="glass-panel glass-panel-hover rounded-2xl overflow-hidden border border-white/5 flex flex-col group cursor-pointer"
                 >
-                  {/* Action Buttons */}
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button onClick={() => openEditModal(log)} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(log.id, "log")} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-
-                  {/* Card Header */}
-                  <div className="p-5 border-b border-white/5 bg-gradient-to-r from-blue-500/5 to-transparent">
-                    <div className="flex gap-2 mb-2 pr-16">
-                      <span className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/20">
-                        {log.week}
-                      </span>
+                  {/* Card Content */}
+                  <div className="p-6 flex flex-col h-full space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30 text-blue-400 font-bold">
+                          {log.team || "??"}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white leading-tight">{log.author}</p>
+                          <p className="text-[10px] text-white/40 mt-0.5 tracking-tighter uppercase font-medium">{log.date || "날짜정보 없음"}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < Number(log.score || 5) ? "bg-amber-400 shadow-sm shadow-amber-400/50" : "bg-white/10"}`} />
+                        ))}
+                      </div>
                     </div>
-                    <h3 className="text-white font-medium flex items-center gap-2 mt-3 text-lg">
-                      <Users size={16} className="text-[var(--color-agency-muted)]" />
-                      {log.author} <span className="text-xs text-white/40 font-normal ml-2">{log.date}</span>
-                    </h3>
-                  </div>
 
-                  {/* Card Body */}
-                  <div className="p-5 space-y-4 flex-1 flex flex-col">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center mb-1">
-                        <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1 text-left">
-                          <MessageSquare size={14} /> 프롬프트
+                    <div className="space-y-2 text-left">
+                      <div className="flex justify-between items-center bg-white/5 px-2 py-1 rounded">
+                        <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                          <Share2 size={10} /> Prompt
                         </h4>
                         <button 
                           onClick={(e) => {
@@ -799,26 +794,30 @@ export default function Dashboard() {
                             navigator.clipboard.writeText(log.prompt);
                             showToast("프롬프트가 복사되었습니다!");
                           }}
-                          className="text-[10px] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white px-2 py-0.5 rounded border border-white/10 transition-colors flex items-center gap-1"
+                          className="text-[10px] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white px-2 py-0.5 rounded border border-white/10 transition-colors"
                         >
-                          <Share2 size={10} /> 복사
+                          복사
                         </button>
                       </div>
-                      <div className="bg-black/20 p-3 rounded-lg border border-white/5">
-                        <p className="text-sm text-white/80 line-clamp-3 italic break-words text-left">
-                          "{log.prompt || "프롬프트 내용 없음"}"
-                        </p>
+                      <div className="relative max-h-[80px] overflow-hidden">
+                        <div className="prose prose-invert prose-xs opacity-80 break-words line-clamp-3">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {log.prompt || "프롬프트 내용 없음"}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     </div>
 
                     <div className="space-y-2 flex-1 flex flex-col min-h-0 text-left">
-                      <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1 mb-1">
-                        <Calendar size={14} /> 실습 요약
+                      <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                        <Calendar size={12} /> 실습 요약
                       </h4>
-                      <div className="flex-1 min-h-0">
-                        <p className="text-sm text-[var(--color-agency-muted)] leading-relaxed line-clamp-4 break-words">
-                          {log.summary || "등록된 요약이 없습니다."}
-                        </p>
+                      <div className="relative flex-1 min-h-[60px] max-h-[100px] overflow-hidden">
+                        <div className="prose prose-invert prose-xs text-[var(--color-agency-muted)] leading-relaxed line-clamp-4 break-words">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {log.summary || "등록된 요약이 없습니다."}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     </div>
 
@@ -879,21 +878,28 @@ export default function Dashboard() {
                 <motion.div
                   key={resource.id || index}
                   initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * 0.05 }}
-                  className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col group relative border-purple-500/20"
+                  onClick={() => { setSelectedEntry(resource); setIsDetailModalOpen(true); }}
+                  className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col group relative border-purple-500/20 cursor-pointer"
                 >
                   {/* Action Buttons (Admin only) */}
                   {userRole === "admin" && (
                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button onClick={() => openResourceEditModal(resource)} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); openResourceEditModal(resource); }} 
+                        className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors"
+                      >
                         <Edit2 size={14} />
                       </button>
-                      <button onClick={() => handleDelete(resource.id, "resource")} className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(resource.id, "resource"); }} 
+                        className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors"
+                      >
                         <Trash2 size={14} />
                       </button>
                     </div>
                   )}
 
-                  <div className="p-6 border-b border-white/5 bg-gradient-to-r from-purple-500/10 to-transparent">
+                  <div className="p-6 border-b border-white/5 bg-gradient-to-r from-purple-500/10 to-transparent text-left">
                     <h3 className="text-xl font-bold text-white mb-2">{resource.title}</h3>
                     <div className="flex items-center gap-2 text-xs text-white/50">
                       <span className="flex items-center gap-1"><Info size={12} /> {resource.author}</span>
@@ -903,20 +909,18 @@ export default function Dashboard() {
                   </div>
 
                   <div className="p-6 flex-1 flex flex-col">
-                    <div className="prose prose-invert prose-purple max-w-none text-sm
-                        prose-a:text-purple-400 prose-a:no-underline hover:prose-a:underline
-                        prose-headings:text-purple-100 prose-headings:font-bold prose-headings:mb-2
-                        prose-p:text-white/80 prose-p:leading-relaxed prose-p:mb-4
-                        prose-ul:list-disc prose-ul:pl-4 prose-ul:mb-4 prose-ul:text-white/80
-                        prose-ol:list-decimal prose-ol:pl-4 prose-ol:mb-4 prose-ol:text-white/80
-                        prose-strong:text-white prose-strong:font-bold
-                        prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-purple-200
-                        prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg
-                        prose-blockquote:border-l-2 prose-blockquote:border-purple-500 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-white/60
-                      ">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {resource.content}
-                      </ReactMarkdown>
+                    <div className="relative max-h-[120px] overflow-hidden text-left">
+                       <div className="prose prose-invert prose-purple max-w-none text-sm
+                          prose-a:text-purple-400 prose-a:no-underline hover:prose-a:underline
+                          prose-p:text-white/80 prose-p:leading-relaxed prose-p:mb-2
+                          prose-strong:text-white prose-strong:font-bold
+                          prose-ul:list-disc prose-ul:pl-4
+                        ">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {resource.content}
+                        </ReactMarkdown>
+                      </div>
+                      <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-[#0a0a0a]" />
                     </div>
                   </div>
                 </motion.div>
@@ -975,21 +979,13 @@ export default function Dashboard() {
                     <Users size={16} /> <strong>{userName}</strong>님으로 작성 진행 중
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">실습 날짜 (Date)</label>
                       <input
                         type="date" required
                         value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
                         className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors cursor-pointer"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">사용된 AI 모델 (Model)</label>
-                      <input
-                        type="text" placeholder="예: Gemini 1.5 Pro, GPT-4o"
-                        value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 transition-colors"
                       />
                     </div>
                   </div>
@@ -1028,9 +1024,12 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2 text-left">
-                    <label className="text-sm font-medium text-white/70">실습 내용 및 결과 요약</label>
+                    <label className="text-sm font-medium text-white/70 flex justify-between items-center">
+                      <span>실습 내용 및 결과 요약</span>
+                      <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/40 uppercase">Markdown</span>
+                    </label>
                     <textarea
-                      required placeholder="이번 주 배운 내용과 결과를 통해 얻은 점을 생생하게 설명해주세요. (목록 카드에 요약되어 표시됩니다)" rows={4}
+                      required placeholder="이번 주 배운 내용과 결과를 통해 얻은 점을 생생하게 설명해주세요. 마크다운을 지원하며 목록 카드에 요약되어 표시됩니다." rows={4}
                       value={formData.summary} onChange={e => setFormData({ ...formData, summary: e.target.value })}
                       className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-white/20 resize-none custom-scrollbar"
                     />
@@ -1182,12 +1181,8 @@ export default function Dashboard() {
 
               <div className="p-8 overflow-y-auto custom-scrollbar space-y-8 bg-black/20">
                 {'prompt' in selectedEntry && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">AI Model</p>
-                      <p className="text-blue-400 font-semibold">{selectedEntry.model || "N/A"}</p>
-                    </div>
-                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 text-left">
                       <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Score</p>
                       <p className="text-amber-400 font-bold flex items-center gap-1">
                         {selectedEntry.score || "5"} / 5
@@ -1225,8 +1220,10 @@ export default function Dashboard() {
                       <div className="w-1.5 h-4 bg-blue-500 rounded-full" />
                       실습 요약 및 결과
                     </h3>
-                    <div className="text-white/80 leading-relaxed whitespace-pre-wrap text-[15px] pl-2 border-l-2 border-white/5">
-                      {selectedEntry.summary}
+                    <div className="glass-panel p-6 rounded-2xl bg-white/[0.02] border-white/5 prose prose-invert prose-blue max-w-none prose-pre:bg-black/50 prose-pre:border-white/10 text-sm md:text-base text-left">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selectedEntry.summary}
+                      </ReactMarkdown>
                     </div>
                   </div>
                 )}
