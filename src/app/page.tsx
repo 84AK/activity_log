@@ -223,6 +223,12 @@ export default function Dashboard() {
         } else {
           setUserRole(data.role || "student")
           setIsLoggedIn(true)
+          
+          if (data.role === "admin") {
+            sessionStorage.setItem("admin_auth", "true")
+            sessionStorage.setItem("admin_pass", password)
+          }
+
           setViewState("dashboard")
           showToast(`${userName}님, 환영합니다!`, "success")
           setAuthError("")
@@ -243,6 +249,8 @@ export default function Dashboard() {
     setIsLoggedIn(false)
     setUserName("")
     setPassword("")
+    sessionStorage.removeItem("admin_auth")
+    sessionStorage.removeItem("admin_pass")
     setViewState("home")
     setDashboardTab("logs")
     showToast("로그아웃 되었습니다.", "success")
@@ -702,6 +710,15 @@ export default function Dashboard() {
             </button>
           ) : null}
 
+          {userRole === "admin" && (
+            <a
+              href="/admin"
+              className="glass-panel glass-panel-hover px-4 py-3 rounded-xl text-white font-bold bg-gradient-to-r from-purple-600 to-blue-600 flex items-center gap-2 shadow-lg hover:shadow-purple-500/20 transition-all border border-white/10"
+            >
+              <Settings size={18} /> <span className="hidden md:inline">관리자 화면 이동</span>
+            </a>
+          )}
+
           <button
             onClick={handleLogout}
             className="glass-panel glass-panel-hover px-4 py-3 rounded-xl text-white/70 hover:text-white bg-white/5 border border-white/10 flex items-center gap-2"
@@ -766,7 +783,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30 text-blue-400 font-bold">
-                          {log.team || "??"}
+                          {log.author?.charAt(0) || "?"}
                         </div>
                         <div>
                           <p className="text-sm font-bold text-white leading-tight">{log.author}</p>
@@ -819,12 +836,22 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex flex-col gap-3 pt-2">
-                       <button 
-                         onClick={() => { setSelectedEntry(log); setIsDetailModalOpen(true); }}
-                         className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-medium transition-all"
-                       >
-                         전체 내용 보기
-                       </button>
+                       <div className="flex gap-2">
+                         <button 
+                           onClick={(e) => { e.stopPropagation(); setSelectedEntry(log); setIsDetailModalOpen(true); }}
+                           className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-medium transition-all"
+                         >
+                           전체 내용 보기
+                         </button>
+                         {(log.author === userName || userRole === "admin") && (
+                           <button 
+                             onClick={(e) => { e.stopPropagation(); openEditModal(log); }}
+                             className="px-4 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 hover:text-blue-300 text-xs font-medium transition-all"
+                           >
+                             수정
+                           </button>
+                         )}
+                       </div>
 
                       {log.link && (
                         <div className="pt-2 border-t border-white/5 text-left">
@@ -889,7 +916,22 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="p-6 flex-1 flex flex-col">
+                  <div className="p-6 flex-1 flex flex-col gap-3">
+                    <div className="flex justify-between items-center bg-white/5 px-2 py-1 rounded">
+                      <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest flex items-center gap-1">
+                        <BookOpen size={10} /> Content
+                      </h4>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(resource.content);
+                          showToast("내용이 복사되었습니다!");
+                        }}
+                        className="text-[10px] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white px-2 py-0.5 rounded border border-white/10 transition-colors"
+                      >
+                        복사
+                      </button>
+                    </div>
                     <div className="relative max-h-[120px] overflow-hidden text-left">
                        <div className="prose prose-invert prose-purple max-w-none text-sm
                           prose-a:text-purple-400 prose-a:no-underline hover:prose-a:underline
@@ -963,11 +1005,26 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-white/70 flex items-center gap-1 text-left">실습 날짜 (Date)</label>
-                      <input
-                        type="date" required
-                        value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors cursor-pointer"
-                      />
+                      <div className="relative group">
+                        <input
+                          id="practice-date-input"
+                          type="date" required
+                          value={formData.week} onChange={e => setFormData({ ...formData, week: e.target.value })}
+                          className="w-full bg-black/40 border border-white/10 rounded-lg p-3 pr-10 text-white focus:ring-2 focus:ring-blue-500 outline-none hover:border-white/20 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dateInput = document.getElementById('practice-date-input') as HTMLInputElement;
+                            if (dateInput && 'showPicker' in HTMLInputElement.prototype) {
+                              dateInput.showPicker();
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors cursor-pointer"
+                        >
+                          <Calendar size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1102,7 +1159,7 @@ export default function Dashboard() {
                 {'prompt' in selectedEntry && (
                   <div className="grid grid-cols-1 gap-4">
                     <div className="bg-white/5 rounded-2xl p-4 border border-white/5 text-left">
-                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Score</p>
+                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">실습 만족도 (Score)</p>
                       <p className="text-amber-400 font-bold flex items-center gap-1">
                         {selectedEntry.score || "5"} / 5
                       </p>
@@ -1168,7 +1225,18 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end">
+              <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end gap-3">
+                {('prompt' in selectedEntry) && (selectedEntry.author === userName || userRole === "admin") && (
+                  <button
+                    onClick={() => {
+                      setIsDetailModalOpen(false)
+                      openEditModal(selectedEntry as LogEntry)
+                    }}
+                    className="px-8 py-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold transition-all border border-blue-500/30"
+                  >
+                    수정하기
+                  </button>
+                )}
                 <button
                   onClick={() => setIsDetailModalOpen(false)}
                   className="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all"

@@ -110,40 +110,7 @@ export default function AdminPortal() {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password.trim()) {
-      setError("비밀번호를 입력하세요.");
-      return;
-    }
-    setIsLoggingIn(true);
-    setError("");
 
-    try {
-      const res = await fetch(PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          action: "login", 
-          username: "admin", 
-          password: password 
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.role === "admin") {
-        setIsAuthorized(true);
-        sessionStorage.setItem("admin_auth", "true");
-        sessionStorage.setItem("admin_pass", password);
-        refreshData();
-      } else {
-        setError(data.message || "권한이 없습니다.");
-      }
-    } catch (err) {
-      setError("서버 응답이 없습니다.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleLogout = () => {
     setIsAuthorized(false);
@@ -206,7 +173,7 @@ export default function AdminPortal() {
 
   if (!mounted) return null;
 
-  // Render Login View
+  // Render Unauthorized View
   if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 font-inter selection:bg-purple-500/30">
@@ -219,35 +186,19 @@ export default function AdminPortal() {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[32px] p-8 shadow-2xl text-center"
         >
-          <div className="w-20 h-20 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-purple-500/20">
+          <div className="w-20 h-20 bg-gradient-to-tr from-red-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-red-500/20">
             <Lock className="text-white w-10 h-10" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">관리자 포털</h1>
-          <p className="text-white/40 text-sm mb-8">액티비티 로그 통합 관리 및 자료실 제어</p>
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">접근 통제됨</h1>
+          <p className="text-white/40 text-sm mb-8 leading-relaxed">
+            세션이 만료되었거나 비정상적인 접근입니다.<br />메인 화면에서 관리자 권한을 가진 계정으로 정상 로그인 후 [관리자 화면 이동] 버튼을 통해 접속해 주세요.
+          </p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/30 group-focus-within:text-purple-400 transition-colors">
-                <Database size={18} />
-              </div>
-              <input 
-                type="password" placeholder="관리자 패스워드"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:ring-2 focus:ring-purple-500 outline-none transition-all placeholder:text-white/20"
-              />
-            </div>
-            {error && <p className="text-red-400 text-xs text-left px-2">{error}</p>}
-            <button 
-              type="submit" disabled={isLoggingIn}
-              className="w-full bg-white text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-purple-50 transition-colors disabled:opacity-50"
-            >
-              {isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : <ChevronRight size={20} />}
-              대시보드 입장
-            </button>
-          </form>
-
-          <a href="/" className="inline-flex items-center gap-2 mt-8 text-white/30 hover:text-white text-sm transition-colors">
-            <ArrowLeft size={14} /> 메인 페이지로 돌아가기
+          <a 
+            href="/"
+            className="w-full bg-white text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-purple-50 transition-colors shadow-xl"
+          >
+            <ArrowLeft size={20} /> 메인 페이지로 돌아가기
           </a>
         </motion.div>
       </div>

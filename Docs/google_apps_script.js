@@ -24,10 +24,23 @@ function getOrCreateUsersSheet() {
   
   if (!sheet) {
     sheet = ss.insertSheet("Users");
-    const headers = ["Username", "Password", "CreatedAt"];
+    const headers = ["Username", "Password", "CreatedAt", "Role"];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length).setBackground("#10B981").setFontColor("#FFFFFF").setFontWeight("bold");
     sheet.setFrozenRows(1);
+    
+    const rule = SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'student']).setAllowInvalid(false).build();
+    sheet.getRange(2, 4, sheet.getMaxRows() - 1, 1).setDataValidation(rule);
+  } else {
+    const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
+    if (headers.indexOf("Role") === -1) {
+      const roleCol = headers.length + 1;
+      sheet.getRange(1, roleCol).setValue("Role")
+        .setBackground("#10B981").setFontColor("#FFFFFF").setFontWeight("bold");
+        
+      const rule = SpreadsheetApp.newDataValidation().requireValueInList(['admin', 'student']).setAllowInvalid(false).build();
+      sheet.getRange(2, roleCol, sheet.getMaxRows() - 1, 1).setDataValidation(rule);
+    }
   }
   return sheet;
 }
@@ -114,11 +127,20 @@ function doPost(e) {
         }
       }
       
-      usersSheet.appendRow([
+      const headers = userData[0] || [];
+      const roleIdx = headers.indexOf("Role");
+      const newRow = [
         username, 
         password, 
         Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss")
-      ]);
+      ];
+      
+      // Role 컬럼이 있다면 기본값으로 student 자동 입력
+      if (roleIdx !== -1) {
+        newRow[roleIdx] = "student";
+      }
+      
+      usersSheet.appendRow(newRow);
       return ContentService.createTextOutput(JSON.stringify({ success: true, message: "가입 성공!" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -128,22 +150,30 @@ function doPost(e) {
       const username = body.username ? body.username.toString() : "";
       const password = body.password ? body.password.toString() : "";
       
-      if (username === "admin" && isAdmin) {
-        return ContentService.createTextOutput(JSON.stringify({ success: true, role: "admin" }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-      
       const usersSheet = getOrCreateUsersSheet();
       const userData = usersSheet.getDataRange().getValues();
+      const headers = userData[0] || [];
+      const roleIdx = headers.indexOf("Role");
       
       for (let i = 1; i < userData.length; i++) {
         const dbUser = userData[i][0] ? userData[i][0].toString() : "";
         const dbPass = userData[i][1] ? userData[i][1].toString() : "";
         
         if (dbUser === username && dbPass === password) {
-          return ContentService.createTextOutput(JSON.stringify({ success: true, role: "student" }))
+          const userRole = (roleIdx !== -1 && userData[i][roleIdx]) 
+                            ? userData[i][roleIdx].toString().trim().toLowerCase() 
+                            : "";
+          const finalRole = (userRole === "admin" || userRole === "관리자") ? "admin" : "student";
+
+          return ContentService.createTextOutput(JSON.stringify({ success: true, role: finalRole }))
             .setMimeType(ContentService.MimeType.JSON);
         }
+      }
+      
+      // 혹시 대비한 서버 강제 우회 설정 (이전 admin 직접 로그인 호환용)
+      if (username === "admin" && isAdmin) {
+        return ContentService.createTextOutput(JSON.stringify({ success: true, role: "admin" }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
       
       return ContentService.createTextOutput(JSON.stringify({ error: "아이디 또는 비밀번호가 일치하지 않습니다." }))
@@ -217,7 +247,7 @@ function doPost(e) {
       if (!targetSheet) return ContentService.createTextOutput(JSON.stringify({ error: "기록을 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
       
       // 본인이거나 관리자인 경우 허용
-      if (row[headers.indexOf("Password")] !== pass && !isAdmin) {
+      if (actualPass !== pass && !isAdmin) {
         return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
