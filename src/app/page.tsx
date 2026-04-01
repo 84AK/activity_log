@@ -261,9 +261,6 @@ export default function Dashboard() {
         model: ""
       })
       setIsModalOpen(true)
-    } else if (dashboardTab === "resources" && userRole === "admin") {
-      setResourceFormData({ title: "", content: "" })
-      setIsResourceModalOpen(true)
     }
   }
 
@@ -881,23 +878,7 @@ export default function Dashboard() {
                   onClick={() => { setSelectedEntry(resource); setIsDetailModalOpen(true); }}
                   className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col group relative border-purple-500/20 cursor-pointer"
                 >
-                  {/* Action Buttons (Admin only) */}
-                  {userRole === "admin" && (
-                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); openResourceEditModal(resource); }} 
-                        className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-white backdrop-blur-sm border border-white/10 transition-colors"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(resource.id, "resource"); }} 
-                        className="p-2 rounded-lg bg-black/50 hover:bg-black text-white/70 hover:text-red-400 backdrop-blur-sm border border-white/10 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
+                  {/* Action Buttons removed - Managed in /admin */}
 
                   <div className="p-6 border-b border-white/5 bg-gradient-to-r from-purple-500/10 to-transparent text-left">
                     <h3 className="text-xl font-bold text-white mb-2">{resource.title}</h3>
@@ -1057,69 +1038,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Resource Input Form Modal */}
-      <AnimatePresence>
-        {isResourceModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="glass-panel w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col max-h-[90vh] border-purple-500/20"
-            >
-              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                <h2 className="text-2xl font-semibold text-white flex items-center gap-2"><BookOpen size={24} className="text-purple-400" /> 자료 등록 (관리자)</h2>
-                <button onClick={() => setIsResourceModalOpen(false)} className="text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="p-6 overflow-y-auto custom-scrollbar">
-                <form id="resource-form" onSubmit={handleResourceSubmit} className="space-y-6">
-                  
-                  <div className="space-y-2 text-left">
-                    <label className="text-sm font-medium text-white/70">자료 제목</label>
-                    <input
-                      required type="text" placeholder="자료 제목을 입력하세요"
-                      value={resourceFormData.title} onChange={e => setResourceFormData({ ...resourceFormData, title: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-white/20"
-                    />
-                  </div>
-
-                  <div className="space-y-2 text-left">
-                    <label className="text-sm font-medium text-white/70 flex justify-between">
-                      <span>내용 (마크다운 지원)</span>
-                      <span className="text-xs text-purple-400 opacity-80 border border-purple-500/20 px-2 py-0.5 rounded">Markdown</span>
-                    </label>
-                    <textarea
-                      required placeholder="마크다운 문법을 사용하여 자료 형식이나 링크를 첨부할 수 있습니다..." rows={8}
-                      value={resourceFormData.content} onChange={e => setResourceFormData({ ...resourceFormData, content: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none placeholder:text-white/20 resize-none font-mono text-sm leading-relaxed"
-                    />
-                  </div>
-                </form>
-              </div>
-
-              <div className="p-6 border-t border-white/10 bg-black/20 flex justify-end gap-3">
-                <button
-                  type="button" onClick={() => setIsResourceModalOpen(false)}
-                  className="px-6 py-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 font-medium transition-colors"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit" form="resource-form" disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium flex items-center gap-2 disabled:opacity-50 transition-colors shadow-lg shadow-purple-500/20"
-                >
-                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                  자료 등록 완료
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Resource Modal removed - Managed in /admin */}
 
       {/* Global Toast Notification */}
       <AnimatePresence>
