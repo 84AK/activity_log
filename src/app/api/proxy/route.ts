@@ -9,12 +9,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, password, ...payload } = body;
 
+    const isAdmin = password === ADMIN_PASSWORD;
+
     // 1. 관리자 로그인 액션 처리 (서버에서 비밀번호 검증)
     if (action === 'login') {
-      if (password === ADMIN_PASSWORD) {
+      if (isAdmin) {
         return NextResponse.json({ success: true, role: 'admin' });
       } else {
-        return NextResponse.json({ success: false, message: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
+        // ... (계속해서 학생 로그인 로직 진행 가능하도록 여기서는 리턴하지 않거나 로직 분리)
       }
     }
 
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         ...body,
+        isAdmin, // 관리자 여부 플래그 추가
         authToken: AUTH_TOKEN // 서버 간 인증을 위한 비밀 토큰 전달
       }),
     });

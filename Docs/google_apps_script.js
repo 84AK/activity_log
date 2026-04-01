@@ -92,7 +92,7 @@ function doPost(e) {
     }
     
     const action = body.action || "create"; 
-    const ADMIN_PASSWORD = "admin";
+    const isAdmin = body.isAdmin === true; // 서버(Next.js Proxy)에서 검증된 플래그 사용
     
     // --- 회원가입 (Signup) ---
     if (action === "signup") {
@@ -128,7 +128,7 @@ function doPost(e) {
       const username = body.username ? body.username.toString() : "";
       const password = body.password ? body.password.toString() : "";
       
-      if (username === "admin" && password === ADMIN_PASSWORD) {
+      if (username === "admin" && isAdmin) {
         return ContentService.createTextOutput(JSON.stringify({ success: true, role: "admin" }))
           .setMimeType(ContentService.MimeType.JSON);
       }
@@ -216,9 +216,10 @@ function doPost(e) {
       
       if (!targetSheet) return ContentService.createTextOutput(JSON.stringify({ error: "기록을 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
       
-      // 권한 체크
-      if (pass !== actualPass && pass !== ADMIN_PASSWORD) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      // 본인이거나 관리자인 경우 허용
+      if (row[headers.indexOf("Password")] !== pass && !isAdmin) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
       
       if (action === "delete") {
@@ -315,10 +316,11 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({ data: resourcesList })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 2. 자료실 글 작성 (관리자만 가능)
+    // --- 자료실 자료 등록 (Create Resource) - 관리자 전용 ---
     if (action === "createResource") {
-      if (body.password !== ADMIN_PASSWORD) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      if (!isAdmin) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
       const resourceSheet = getOrCreateResourcesSheet();
       const newId = new Date().getTime().toString();
@@ -329,10 +331,11 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({ success: true, id: newId })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 3. 자료실 글 삭제 (관리자만 가능)
+    // --- 자료실 자료 삭제 (Delete Resource) - 관리자 전용 ---
     if (action === "deleteResource") {
-      if (body.password !== ADMIN_PASSWORD) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      if (!isAdmin) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
 
       const resourceSheet = getOrCreateResourcesSheet();
@@ -346,10 +349,11 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({ error: "해당 자료를 찾을 수 없습니다." })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 4. 자료실 글 수정 (관리자만 가능)
+    // --- 자료실 자료 수정 (Edit Resource) - 관리자 전용 ---
     if (action === "editResource") {
-      if (body.password !== ADMIN_PASSWORD) {
-        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." })).setMimeType(ContentService.MimeType.JSON);
+      if (!isAdmin) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
 
       const resourceSheet = getOrCreateResourcesSheet();
