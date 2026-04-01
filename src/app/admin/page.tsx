@@ -39,7 +39,7 @@ export default function AdminPortal() {
   const [mounted, setMounted] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [password, setPassword] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,9 +67,11 @@ export default function AdminPortal() {
     // Check session
     const authStatus = sessionStorage.getItem("admin_auth");
     const savedPassword = sessionStorage.getItem("admin_pass");
-    if (authStatus === "true" && savedPassword) {
+    const savedUsername = sessionStorage.getItem("admin_username");
+    if (authStatus === "true" && savedPassword && savedUsername) {
       setIsAuthorized(true);
       setPassword(savedPassword);
+      setUsername(savedUsername);
       refreshData();
     } else {
       setIsLoading(false);
@@ -127,6 +129,7 @@ export default function AdminPortal() {
         body: JSON.stringify({ 
           action: "deleteResource", 
           id, 
+          username: username,
           password: password 
         })
       });
@@ -149,7 +152,8 @@ export default function AdminPortal() {
           action: editMode ? "editResource" : "createResource",
           id: editMode ? editId : undefined,
           ...resourceFormData,
-          author: "admin",
+          author: username,
+          username: username,
           password: password
         })
       });

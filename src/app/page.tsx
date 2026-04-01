@@ -227,6 +227,7 @@ export default function Dashboard() {
           if (data.role === "admin") {
             sessionStorage.setItem("admin_auth", "true")
             sessionStorage.setItem("admin_pass", password)
+            sessionStorage.setItem("admin_username", userName)
           }
 
           setViewState("dashboard")
@@ -251,6 +252,7 @@ export default function Dashboard() {
     setPassword("")
     sessionStorage.removeItem("admin_auth")
     sessionStorage.removeItem("admin_pass")
+    sessionStorage.removeItem("admin_username")
     setViewState("home")
     setDashboardTab("logs")
     showToast("로그아웃 되었습니다.", "success")
