@@ -193,6 +193,72 @@ function doPost(e) {
       }
       
       return ContentService.createTextOutput(JSON.stringify({ error: "아이디 또는 비밀번호가 일치하지 않습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // --- 유저 정보 수정 (Update User) ---
+    if (action === "updateUser") {
+      const currentUsername = body.currentUsername;
+      const newUsername = body.newUsername;
+      const newPassword = body.newPassword;
+      
+      if (!currentUsername || !newUsername || !newPassword) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "모든 정보를 입력해주세요." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const usersSheet = getOrCreateUsersSheet();
+      const userData = usersSheet.getDataRange().getValues();
+      let userRowIndex = -1;
+      
+      // 1. 유저 찾기
+      for (let i = 1; i < userData.length; i++) {
+        if (userData[i][0] === currentUsername) {
+          userRowIndex = i + 1;
+          break;
+        }
+      }
+      
+      if (userRowIndex === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "사용자를 찾을 수 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // 중복 체크 (이름을 바꾸는 경우에만)
+      if (currentUsername !== newUsername) {
+        for (let i = 1; i < userData.length; i++) {
+          if (userData[i][0] === newUsername) {
+            return ContentService.createTextOutput(JSON.stringify({ error: "이미 존재하는 아이디입니다." }))
+              .setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+      }
+      
+      // 업데이트 실행
+      usersSheet.getRange(userRowIndex, 1).setValue(newUsername);
+      usersSheet.getRange(userRowIndex, 2).setValue(newPassword);
+      
+      // 2. 기존 로그의 Author 필드도 업데이트 (일관성 유지)
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheets = ss.getSheets();
+      sheets.forEach(sheet => {
+        const name = sheet.getName();
+        if (name === "Users" || name === "Resources") return;
+        
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const authorIdx = headers.indexOf("Author");
+        
+        if (authorIdx !== -1) {
+          for (let i = 1; i < data.length; i++) {
+            if (data[i][authorIdx] === currentUsername) {
+              sheet.getRange(i + 1, authorIdx + 1).setValue(newUsername);
+            }
+          }
+        }
+      });
+
+      return ContentService.createTextOutput(JSON.stringify({ success: true, message: "정보가 성공적으로 수정되었습니다." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     

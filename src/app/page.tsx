@@ -64,6 +64,7 @@ export default function Dashboard() {
 
   // Filter State
   const [filterWeek, setFilterWeek] = useState("전체")
+  const [filterAuthor, setFilterAuthor] = useState("") // 추가: 유저 이름 필터
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -105,6 +106,13 @@ export default function Dashboard() {
   // 상세 보기 모달 상태
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | ResourceEntry | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+
+  // 유저 정보 수정 모달 상태 추가
+  const [isUserSettingsModalOpen, setIsUserSettingsModalOpen] = useState(false)
+  const [userSettingsForm, setUserSettingsForm] = useState({
+    newUsername: "",
+    newPassword: ""
+  })
 
   const PROXY_URL = '/api/proxy'
 
@@ -402,13 +410,51 @@ export default function Dashboard() {
     }
   }
 
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userSettingsForm.newUsername.trim() || !userSettingsForm.newPassword.trim()) {
+      showToast("이름과 비밀번호를 입력해주세요.", "error")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const res = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "updateUser",
+          currentUsername: userName,
+          newUsername: userSettingsForm.newUsername,
+          newPassword: userSettingsForm.newPassword
+        })
+      })
+
+      const data = await res.json()
+      if (res.ok && !data.error) {
+        showToast("정보가 성공적으로 수정되었습니다.", "success")
+        setUserName(userSettingsForm.newUsername)
+        setPassword(userSettingsForm.newPassword)
+        setIsUserSettingsModalOpen(false)
+        await refreshData()
+      } else {
+        showToast(data.error || "수정에 실패했습니다.", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      showToast("서버 통신 중 오류가 발생했습니다.", "error")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (!mounted) return null
 
   // Derived state: 권한에 따른 리스트 표시
   const authorizedLogs = userRole === "admin" ? logs : logs.filter(l => l.author === userName)
 
   const filteredLogs = authorizedLogs.filter(log => {
-    if (filterWeek !== "전체" && log.week !== filterWeek) return false
+    if (filterAuthor && !log.author.toLowerCase().includes(filterAuthor.toLowerCase())) return false
     return true
   })
 
@@ -722,6 +768,17 @@ export default function Dashboard() {
           )}
 
           <button
+            onClick={() => {
+              setUserSettingsForm({ newUsername: userName, newPassword: password });
+              setIsUserSettingsModalOpen(true);
+            }}
+            className="glass-panel glass-panel-hover px-4 py-3 rounded-xl text-white/70 hover:text-white bg-white/5 border border-white/10 flex items-center gap-2"
+            title="정보 수정"
+          >
+            <Users size={18} /> <span className="hidden md:inline">정보 수정</span>
+          </button>
+
+          <button
             onClick={handleLogout}
             className="glass-panel glass-panel-hover px-4 py-3 rounded-xl text-white/70 hover:text-white bg-white/5 border border-white/10 flex items-center gap-2"
           >
@@ -733,7 +790,6 @@ export default function Dashboard() {
       {/* Main Content Areas */}
       {dashboardTab === "logs" ? (
         <>
-          {/* Filter Bar (Logs only) */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
             className="flex flex-col md:flex-row gap-4 items-center bg-[var(--color-agency-bg)]/50 p-4 rounded-2xl border border-[var(--color-agency-border)] backdrop-blur-md"
@@ -742,13 +798,17 @@ export default function Dashboard() {
               <Filter size={18} className="text-blue-400" /> 필터:
             </div>
 
-            <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
-              <select
-                value={filterWeek} onChange={(e) => setFilterWeek(e.target.value)}
-                className="glass-panel px-4 py-2 rounded-lg bg-transparent text-white border-white/10 outline-none w-full md:w-40"
-              >
-                {WEEKS.map(w => <option key={w} className="bg-gray-900">{w}</option>)}
-              </select>
+            <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar flex-1">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  placeholder="유저 이름으로 검색하여 기록 찾기..."
+                  value={filterAuthor}
+                  onChange={(e) => setFilterAuthor(e.target.value)}
+                  className="glass-panel px-4 py-2 pl-10 rounded-lg bg-transparent text-white border-white/10 outline-none w-full placeholder:text-white/20 focus:border-blue-500/50 transition-all"
+                />
+                <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+              </div>
             </div>
 
             {userRole === "admin" && (
@@ -1098,6 +1158,76 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Resource Modal removed - Managed in /admin */}
+
+      {/* User Settings Modal */}
+      <AnimatePresence>
+        {isUserSettingsModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="glass-panel w-full max-w-md rounded-2xl overflow-hidden flex flex-col border border-white/10 shadow-2xl"
+            >
+              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Users size={20} className="text-blue-400" /> 정보 수정
+                </h2>
+                <button onClick={() => setIsUserSettingsModalOpen(false)} className="text-white/30 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-1">새 아이디 (New ID)</label>
+                  <input
+                    type="text" required
+                    value={userSettingsForm.newUsername}
+                    onChange={e => setUserSettingsForm({ ...userSettingsForm, newUsername: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-1">새 비밀번호 (New Password)</label>
+                  <div className="relative group">
+                    <input
+                      type={showPassword ? "text" : "password"} required
+                      value={userSettingsForm.newPassword}
+                      onChange={e => setUserSettingsForm({ ...userSettingsForm, newPassword: e.target.value })}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors p-1"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button" onClick={() => setIsUserSettingsModalOpen(false)}
+                    className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-all"
+                  >
+                    취소
+                  </button>
+                  <button
+                    disabled={isSubmitting} type="submit"
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                    저장하기
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Global Toast Notification */}
       <AnimatePresence>
