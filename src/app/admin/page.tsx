@@ -44,9 +44,10 @@ export default function AdminPortal() {
   const [error, setError] = useState("");
 
   // Dashboard State
-  const [activeTab, setActiveTab] = useState<"logs" | "resources">("resources");
+  const [activeTab, setActiveTab] = useState<"logs" | "resources" | "users">("resources");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [resources, setResources] = useState<ResourceEntry[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [filterText, setFilterText] = useState("");
 
   // Modal State
@@ -84,7 +85,7 @@ export default function AdminPortal() {
       const res = await fetch(PROXY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "read" })
+        body: JSON.stringify({ action: "getAllData" })
       });
       const data = await res.json();
       
@@ -103,6 +104,26 @@ export default function AdminPortal() {
             return Number(b.id || 0) - Number(a.id || 0);
           });
           setResources(sortedResources);
+        }
+
+        // 3. 유저 목록 가져오기
+        const savedPassword = password || sessionStorage.getItem("admin_pass");
+        const savedUsername = username || sessionStorage.getItem("admin_username");
+        
+        if (savedUsername && savedPassword) {
+          const uRes = await fetch(PROXY_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              action: "getAllUsers",
+              username: savedUsername,
+              password: savedPassword
+            })
+          });
+          const uData = await uRes.json();
+          if (uRes.ok && uData.users) {
+            setUsers(uData.users);
+          }
         }
       }
     } catch (err) {
@@ -321,6 +342,12 @@ export default function AdminPortal() {
                >
                  <MessageSquare size={18} /> 실습 모니터링
                </button>
+               <button 
+                onClick={() => setActiveTab("users")}
+                className={`px-8 py-3 rounded-xl flex items-center gap-2 font-bold text-sm transition-all ${activeTab === "users" ? "bg-white text-black shadow-xl" : "text-white/40 hover:text-white/60"}`}
+               >
+                 <Users size={18} /> 학생 관리
+               </button>
              </div>
           </div>
 
@@ -378,7 +405,7 @@ export default function AdminPortal() {
                     ))}
                   </div>
                 </motion.div>
-              ) : (
+              ) : activeTab === "logs" ? (
                 <motion.div 
                   key="logs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                   className="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden"
@@ -386,7 +413,6 @@ export default function AdminPortal() {
                   <div className="p-6 border-b border-white/5 flex gap-4 overflow-x-auto custom-scrollbar whitespace-nowrap">
                     <button className="px-4 py-2 rounded-xl bg-white text-black font-bold text-xs">전체 팀</button>
                     <button className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-xs text-white/50">최신순</button>
-                    <button className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-xs text-white/50">별점 높은 순</button>
                   </div>
                   <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-left text-sm">
@@ -426,6 +452,45 @@ export default function AdminPortal() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                  className="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden"
+                >
+                  <div className="p-6 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
+                    <h3 className="font-bold text-white/70">학생 명단 관리</h3>
+                    <div className="text-[10px] text-white/30 uppercase tracking-widest font-black">Total Users: {users.length}</div>
+                  </div>
+                  <div className="overflow-x-auto min-h-[400px]">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="bg-white/[0.02] border-b border-white/5">
+                          <th className="p-6 font-bold text-white/40 uppercase tracking-widest text-[10px]">아이디 (Username)</th>
+                          <th className="p-6 font-bold text-white/40 uppercase tracking-widest text-[10px]">권한 (Role)</th>
+                          <th className="p-6 font-bold text-white/40 uppercase tracking-widest text-[10px]">가입일 (Created At)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((user, idx) => (
+                          <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors group">
+                            <td className="p-6 font-bold text-white/80">{user.Username}</td>
+                            <td className="p-6">
+                              <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter border ${user.Role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
+                                {user.Role || 'student'}
+                              </span>
+                            </td>
+                            <td className="p-6 text-white/40 font-mono text-xs">{user.CreatedAt}</td>
+                          </tr>
+                        ))}
+                        {users.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="p-20 text-center text-white/20 italic">등록된 학생 정보가 없습니다.</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

@@ -361,7 +361,7 @@ function doPost(e) {
       const sheets = ss.getSheets();
       let allLogs = [];
 
-      // 1. Logs 데이터 가져오기 (doGet 로직 통합)
+      // 1. Logs 데이터 가져오기
       sheets.forEach(sheet => {
         const name = sheet.getName();
         if (name === "Users" || name === "Resources") return; 
@@ -384,7 +384,7 @@ function doPost(e) {
         }
       });
 
-      // 2. Resources 데이터 가져오기 (getResources 로직 통합)
+      // 2. Resources 데이터 가져오기
       const resourceSheet = getOrCreateResourcesSheet();
       const resData = resourceSheet.getDataRange().getValues();
       let allResources = [];
@@ -404,6 +404,32 @@ function doPost(e) {
         logs: allLogs, 
         resources: allResources 
       })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // --- 전체 유저 목록 가져오기 (Admin Only) ---
+    if (action === "getAllUsers") {
+      if (!verifyAdminAuth(body.username, body.password)) {
+        return ContentService.createTextOutput(JSON.stringify({ error: "권한이 없습니다." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const usersSheet = getOrCreateUsersSheet();
+      const userData = usersSheet.getDataRange().getValues();
+      const headers = userData[0];
+      const rows = userData.slice(1);
+      
+      const userList = rows.map(row => {
+        let obj = {};
+        headers.forEach((header, index) => {
+          if (header !== "Password") {
+            obj[header] = row[index];
+          }
+        });
+        return obj;
+      });
+      
+      return ContentService.createTextOutput(JSON.stringify({ users: userList }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     // --- 자료실 (Resources) 관련 ---
